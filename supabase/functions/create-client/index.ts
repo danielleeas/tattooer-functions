@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       const createRes = await supabase.auth.admin.createUser({
         email,
         password: email,
+        email_confirm: true,
         user_metadata: { full_name, phone_number, location },
       });
       if (createRes.error || !createRes.data.user) {
