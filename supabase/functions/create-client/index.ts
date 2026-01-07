@@ -32,11 +32,10 @@ Deno.serve(async (req) => {
     const full_name = (body.full_name || "").trim();
     const email = (body.email || "").trim();
     const phone_number = (body.phone_number || "").trim();
-    const location = (body.location || "").trim();
-    const project_notes = body.project_notes?.toString() ?? null;
+    const city_country = (body.city_country || "").trim();
     const artist_id = (body.artist_id || "").trim();
 
-    if (!full_name || !email || !phone_number || !artist_id) {
+    if (!full_name || !email || !phone_number || !artist_id || !city_country) {
       return new Response(JSON.stringify({ success: false, error: "Missing required fields" } as CreateClientResult), { status: 400 });
     }
 
@@ -63,7 +62,7 @@ Deno.serve(async (req) => {
         email,
         password: email,
         email_confirm: true,
-        user_metadata: { full_name, phone_number, location },
+        user_metadata: { full_name, phone_number, city_country },
       });
       if (createRes.error || !createRes.data.user) {
         return new Response(JSON.stringify({ success: false, error: createRes.error?.message || "Failed to create auth user" } as CreateClientResult), { status: 400 });
@@ -71,49 +70,9 @@ Deno.serve(async (req) => {
       userId = createRes.data.user.id;
     }
 
-    // 2) Insert/upsert into clients with id = auth user id
-    // If your DB still enforces NOT NULL on location, use '' as default or relax the constraint.
-    const insertRes = await supabase
-      .from("clients")
-      .upsert(
-        {
-          id: userId,
-          full_name,
-          email,
-          phone_number,
-          location,
-          project_notes,
-        },
-        { onConflict: "id" }
-      )
-      .select()
-      .single();
-
-    if (insertRes.error) {
-      return new Response(JSON.stringify({ success: false, error: insertRes.error.message } as CreateClientResult), { status: 400 });
-    }
-
-    const linkInsertRes = await supabase
-      .from("links")
-      .upsert(
-        {
-          client_id: userId,
-          artist_id: artist_id,
-          status: "pending",
-        },
-        { onConflict: "client_id,artist_id" }
-      )
-      .select()
-      .single();
-
-    if (linkInsertRes.error) {
-      return new Response(JSON.stringify({ success: false, error: linkInsertRes.error.message } as CreateClientResult), { status: 400 });
-    }
-
     const data: CreateClientResult = {
       success: true,
-      client: { ...insertRes.data, status: linkInsertRes.data?.status },
-      authUserId: userId,
+      authUserId: userId || undefined,
     };
     return new Response(JSON.stringify(data), { status: 200 });
   } catch (e) {
